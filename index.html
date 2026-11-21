@@ -38,7 +38,8 @@
   #chip[hidden] { display: none; }
   #dot { width: 10px; height: 10px; border-radius: 50%; background: var(--red); flex: none; }
   #dot.ok { background: var(--green); }
-  #codeText { color: #fff; font-weight: 700; letter-spacing: .5px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  #codeText { color: #fff; font-weight: 700; letter-spacing: .5px; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .chip-btns { flex: 0 0 100%; display: flex; gap: 8px; }
   #chip .btn.small { background: var(--border); }
   #chip .btn.small:hover { background: #475569; }
 
@@ -109,8 +110,10 @@
       <div id="chip" hidden>
         <span id="dot" title="Connection status"></span>
         <span id="codeText"></span>
-        <button id="copyBtn" class="btn dark small">Get Controller Link</button>
-        <button id="leaveBtn" class="btn dark small">Leave</button>
+        <div class="chip-btns">
+          <button id="copyBtn" class="btn dark small">Get Controller Link</button>
+          <button id="leaveBtn" class="btn dark small">Leave</button>
+        </div>
       </div>
       <h2>Settings</h2>
       <label>Display Timers Count</label>
