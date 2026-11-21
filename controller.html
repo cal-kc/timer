@@ -291,7 +291,21 @@ function join(code) {
   const root = ref(db, "sessions/" + code);
   S.unsubs.push(onValue(ref(db, ".info/serverTimeOffset"), (s) => { S.offset = s.val() || 0; }));
   S.unsubs.push(onValue(ref(db, ".info/connected"), (s) => $("#dot").classList.toggle("ok", !!s.val())));
-  S.unsubs.push(onValue(root, (snap) => { S.data = snap.val(); renderAll(); }, (err) => {
+  S.unsubs.push(onValue(root, (snap) => {
+    const data = snap.val();
+    if (!data) {
+      // the controller never creates sessions: send the person back to the code screen
+      const c = S.code;
+      leave(true);
+      S.code = null; S.data = null; S.count = 0;
+      try { localStorage.removeItem(SESSION_KEY); } catch (e) {}
+      showJoin();
+      $("#codeIn").value = c;
+      $("#err").textContent = `Session "${c}" doesn't exist yet. Start it on the timer display first.`;
+      return;
+    }
+    S.data = data; renderAll();
+  }, (err) => {
     showJoin(); $("#err").textContent = "Could not open the session: " + err.message;
   }));
   requestWake();
