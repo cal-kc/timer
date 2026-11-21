@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tournament Timer</title>
+<style>
+  /* Put digital-7.ttf in a "fonts" folder next to this file. Falls back to a monospace font if missing. */
+  @font-face { font-family: "Digital-7"; src: url("fonts/digital-7.ttf") format("truetype"); font-display: swap; }
+
+  :root {
+    --bg: #0f172a; --panel: #1e293b; --border: #334155; --muted: #94a3b8;
+    --blue: #3b82f6; --blue-h: #2563eb; --red: #ef4444; --red-h: #dc2626; --green: #22c55e;
+    --digital: "Digital-7", "Digital-7 Mono", Consolas, "Courier New", monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: var(--bg); color: #fff;
+    font-family: "Microsoft JhengHei", "Noto Sans TC", system-ui, sans-serif; overflow: hidden; }
+  body { display: flex; flex-direction: column; }
+
+  button { font: inherit; color: #fff; border: 0; cursor: pointer; }
+  .btn { background: var(--border); padding: 8px 14px; border-radius: 4px; transition: background .12s; }
+  .btn:hover { background: #475569; }
+  .btn.on { background: var(--blue); } .btn.on:hover { background: var(--blue-h); }
+  .btn.stop { background: var(--red); } .btn.stop:hover { background: var(--red-h); }
+  .btn.dark { background: var(--panel); } .btn.dark:hover { background: var(--border); }
+  .btn.small { padding: 4px 10px; font-size: 12px; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+  #topbar { display: flex; align-items: center; padding: 10px; gap: 10px; background: var(--bg); }
+  #topbar .side { flex: 1; display: flex; gap: 6px; align-items: center; }
+  #topbar .right { justify-content: flex-end; }
+  #topbar .center { display: flex; align-items: center; gap: 10px; }
+  #blocks { display: flex; gap: 6px; }
+  #master { width: 160px; }
+  #chip { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+  #dot { width: 10px; height: 10px; border-radius: 50%; background: var(--red); }
+  #dot.ok { background: var(--green); }
+  #codeText { color: #fff; font-weight: 700; letter-spacing: .5px; }
+
+  #main { position: relative; flex: 1; min-height: 0; background: #000; }
+  #container { position: absolute; inset: 0; display: grid; gap: 2px; }
+  .timer { position: relative; overflow: hidden; min-width: 0; }
+
+  .t-title { position: absolute; left: 50%; transform: translate(-50%, -50%); white-space: nowrap; font-weight: 700; }
+  .cards { position: absolute; left: 50%; top: 55%; transform: translate(-50%, -50%);
+    display: flex; align-items: center; gap: 2px; cursor: pointer; user-select: none; }
+  .card { border: 1px solid var(--border); background: #1e293b; padding: 2px; display: flex; }
+  .card > div { flex: 1; display: flex; align-items: center; justify-content: center;
+    font-family: var(--digital); font-weight: 700; line-height: 1; }
+  .colon { font-family: var(--digital); font-weight: 700; padding: 0 2px; }
+  .bar { position: absolute; left: 0; right: 0; bottom: 25px; display: flex; justify-content: center; gap: 20px; }
+  .round { border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; transition: background .12s; }
+  .round.reset { width: 55px; height: 55px; background: var(--panel); color: var(--muted); font-size: 22px; }
+  .round.reset:hover { background: var(--border); }
+  .round.play { width: 65px; height: 65px; background: var(--blue); font-size: 22px; }
+  .round.play:hover { background: var(--blue-h); }
+  .round.play.running { background: var(--red); } .round.play.running:hover { background: var(--red-h); }
+
+  #settings { position: absolute; top: 0; right: 0; bottom: 0; width: 280px; background: var(--panel);
+    padding: 15px; overflow-y: auto; display: none; z-index: 5; }
+  #settings.open { display: block; }
+  #settings h2 { margin: 0 0 6px; font-size: 18px; }
+  #settings label { display: block; color: var(--muted); font-size: 12px; margin: 12px 0 4px; }
+  #settings input[type=text], #settings input[type=number] { width: 100%; background: var(--bg); color: #fff;
+    border: 1px solid var(--border); padding: 6px 8px; border-radius: 3px; font: inherit; }
+  #settings .row { display: flex; gap: 4px; align-items: center; }
+  #settings .row .btn { flex: 1; padding: 6px 4px; }
+  #settings .time { display: flex; gap: 8px; align-items: center; }
+  #settings .time input { width: 64px; }
+  #settings hr { border: 0; border-top: 1px solid var(--border); margin: 14px 0 0; }
+  #settings .full { width: 100%; margin-top: 8px; }
+  #settings input[type=color] { width: 100%; height: 34px; border: 0; padding: 0; background: none; cursor: pointer; }
+  #hint { position: absolute; left: 12px; bottom: 6px; color: #475569; font-size: 11px; pointer-events: none; z-index: 1; }
+
+  #join { position: fixed; inset: 0; background: var(--bg); z-index: 50; display: none;
+    align-items: center; justify-content: center; }
+  #join.open { display: flex; }
+  #join form { background: var(--panel); padding: 28px; border-radius: 8px; width: min(360px, 92vw); }
+  #join h1 { margin: 0 0 6px; font-size: 22px; }
+  #join p { margin: 0 0 16px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+  #join input { width: 100%; background: var(--bg); color: #fff; border: 1px solid var(--border);
+    padding: 10px 12px; border-radius: 4px; font: inherit; font-size: 18px; letter-spacing: 1px; }
+  #join .btn { width: 100%; margin-top: 12px; padding: 10px; }
+  #joinErr { color: #fca5a5; font-size: 13px; min-height: 18px; margin-top: 8px; }
+</style>
+</head>
+<body>
+  <div id="topbar">
+    <div class="side">
+      <div id="chip" hidden>
+        <span id="dot" title="Connection status"></span>
+        <span id="codeText"></span>
+        <button id="copyBtn" class="btn dark small">Copy link</button>
+        <button id="leaveBtn" class="btn dark small">Leave</button>
+      </div>
+    </div>
+    <div class="center">
+      <div id="blocks"></div>
+      <button id="master" class="btn on">▶ START SELECTED</button>
+    </div>
+    <div class="side right">
+      <button id="fsBtn" class="btn">Fullscreen</button>
+      <button id="settingsBtn" class="btn dark">⚙ Settings</button>
+    </div>
+  </div>
+
+  <div id="main">
+    <div id="container"></div>
+    <div id="hint">Space: start/stop selected · F11: fullscreen</div>
+    <div id="settings">
+      <h2>Settings</h2>
+      <label>Display Timers Count</label>
+      <div class="row" id="countBtns"></div>
+      <hr>
+      <label>Select Timer to Edit</label>
+      <div class="row" id="tabBtns"></div>
+      <label for="titleIn">Timer Title</label>
+      <input type="text" id="titleIn">
+      <label for="fsIn">Title Font Size</label>
+      <input type="number" id="fsIn" min="10" max="120">
+      <label>Time Setting (max 99:59)</label>
+      <div class="time">
+        <span>M:</span><input type="number" id="minIn" min="0" max="99">
+        <span>S:</span><input type="number" id="secIn" min="0" max="59">
+      </div>
+      <button class="btn on full" id="applyBtn">Apply Time &amp; Title</button>
+      <label>Controls &amp; Style</label>
+      <input type="color" id="bgIn" aria-label="Timer background color">
+      <button class="btn full" id="bwBtn">Text Color (B/W)</button>
+      <button class="btn full" id="swBtn" style="background:#ef4444">SW: RED</button>
+    </div>
+  </div>
+
+  <div id="join">
+    <form id="joinForm">
+      <h1>Join a session</h1>
+      <p>Enter the same session code on both PCs. Anything you change on one shows up on the other.</p>
+      <input id="codeIn" maxlength="32" autocomplete="off" spellcheck="false" placeholder="e.g. PTCG-7392" aria-label="Session code">
+      <div id="joinErr"></div>
+      <button class="btn on" type="submit">Join session</button>
+    </form>
+  </div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+import { getDatabase, ref, onValue, update, set } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCY1rLVqejcTKBP7rtVGGanlL8tuIie9L0",
+  authDomain: "remote-timer-992b7.firebaseapp.com",
+  databaseURL: "https://remote-timer-992b7-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "remote-timer-992b7",
+  storageBucket: "remote-timer-992b7.firebasestorage.app",
+  messagingSenderId: "661715221705",
+  appId: "1:661715221705:web:28d63c697c69ab29e52118"
+};
+const db = getDatabase(initializeApp(firebaseConfig));
+
+const MAX_SECONDS = 99 * 60 + 59;
+const SESSION_KEY = "tournament_timer_session";
+const CODE_RE = /^[A-Za-z0-9_-]{3,32}$/;
+const $ = (s) => document.querySelector(s);
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+function adjustLightness(hex, off = -0.10) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return "#111827";
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16 & 255) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0, l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h /= 6;
+  }
+  const nl = (l + off < 0.04) ? Math.min(1, l + Math.abs(off) * 0.8) : l + off;
+  const f = (p, q, t) => { t = (t + 1) % 1; return t < 1/6 ? p + (q - p) * 6 * t : t < 1/2 ? q : t < 2/3 ? p + (q - p) * (2/3 - t) * 6 : p; };
+  let R, G, B;
+  if (s === 0) R = G = B = nl;
+  else {
+    const q = nl < 0.5 ? nl * (1 + s) : nl + s - nl * s, p = 2 * nl - q;
+    R = f(p, q, h + 1/3); G = f(p, q, h); B = f(p, q, h - 1/3);
+  }
+  const x = (v) => Math.round(v * 255).toString(16).padStart(2, "0");
+  return "#" + x(R) + x(G) + x(B);
+}
+
+/*
+  Session data in Firebase:  sessions/<code>
+    visible_count: 1..3
+    timers/<i>: title, reset_seconds, title_font_size, bg_color, text_color, stopwatch_color,
+                running, started_at (server ms), base_seconds, base_overtime
+  Each PC computes the clock from started_at + the server clock offset, so both always agree.
+*/
+class Timer {
+  constructor(index) {
+    this.index = index;
+    this.resetSeconds = 600;
+    this.bgColor = "#0f172a";
+    this.textColor = "#ffffff";
+    this.title = `Timer ${index + 1}`;
+    this.titleFontSize = 40;
+    this.swColor = "#ef4444";
+    this.running = false;
+    this.startedAt = 0;
+    this.baseSeconds = 600;
+    this.baseOvertime = false;
+    this.shown = null;
+    this.build();
+  }
+
+  defaults() {
+    return {
+      title: this.title, reset_seconds: this.resetSeconds, title_font_size: this.titleFontSize,
+      bg_color: this.bgColor, text_color: this.textColor, stopwatch_color: this.swColor,
+      running: false, base_seconds: this.resetSeconds, base_overtime: false,
+    };
+  }
+
+  applyRemote(d) {
+    d = d || {};
+    this.title = d.title ?? this.title;
+    this.resetSeconds = clamp(Number(d.reset_seconds ?? this.resetSeconds) || 0, 0, MAX_SECONDS);
+    this.titleFontSize = clamp(Number(d.title_font_size ?? this.titleFontSize) || 40, 10, 120);
+    this.bgColor = d.bg_color ?? this.bgColor;
+    this.textColor = d.text_color ?? this.textColor;
+    this.swColor = d.stopwatch_color ?? this.swColor;
+    this.running = !!d.running;
+    this.startedAt = Number(d.started_at) || 0;
+    this.baseSeconds = clamp(Number(d.base_seconds ?? this.resetSeconds) || 0, 0, MAX_SECONDS);
+    this.baseOvertime = !!d.base_overtime;
+    this.updateSize();
+    this.refresh();
+  }
+
+  compute() {
+    if (!this.running) return { total: this.baseSeconds, over: this.baseOvertime };
+    const e = Math.max(0, Math.floor((app.serverNow() - this.startedAt) / 1000));
+    if (this.baseOvertime) return { total: Math.min(MAX_SECONDS, this.baseSeconds + e), over: true };
+    if (e <= this.baseSeconds) return { total: this.baseSeconds - e, over: false };
+    return { total: Math.min(MAX_SECONDS, e - this.baseSeconds), over: true };
+  }
+
+  build() {
+    const el = this.el = document.createElement("div");
+    el.className = "timer";
+    el.innerHTML = `
+      <div class="t-title"></div>
+      <div class="cards">
+        <div class="card"><div></div></div><div class="card"><div></div></div>
+        <span class="colon">:</span>
+        <div class="card"><div></div></div><div class="card"><div></div></div>
+      </div>
+      <div class="bar">
+        <button class="round reset" aria-label="Reset">↺</button>
+        <button class="round play" aria-label="Start or pause">▶</button>
+      </div>`;
+    this.titleEl = el.querySelector(".t-title");
+    this.cardsEl = el.querySelector(".cards");
+    this.cardEls = [...el.querySelectorAll(".card")];
+    this.digitEls = this.cardEls.map((c) => c.firstElementChild);
+    this.colonEl = el.querySelector(".colon");
+    this.playBtn = el.querySelector(".play");
+    this.cardsEl.addEventListener("click", () => app.write({ [this.index]: this.togglePatch() }));
+    this.playBtn.addEventListener("click", () => app.write({ [this.index]: this.togglePatch() }));
+    el.querySelector(".reset").addEventListener("click", () => app.write({ [this.index]: this.resetPatch() }));
+    new ResizeObserver(() => this.updateSize()).observe(el);
+  }
+
+  togglePatch() {
+    const c = this.compute();
+    if (this.running) return { running: false, started_at: null, base_seconds: c.total, base_overtime: c.over };
+    return { running: true, started_at: app.serverNow(), base_seconds: c.total, base_overtime: c.over };
+  }
+  pausePatch() { return this.running ? this.togglePatch() : null; }
+  resetPatch() {
+    return { running: false, started_at: null, base_seconds: this.resetSeconds, base_overtime: false };
+  }
+
+  updateSize() {
+    const w = this.el.clientWidth, h = this.el.clientHeight;
+    if (w <= 50 || h <= 50) return;
+    let cw = Math.floor(w * 0.70 / 4.6), ch = Math.floor(cw * 1.45);
+    const maxH = Math.floor(h * 0.36);
+    if (ch > maxH) { ch = maxH; cw = Math.floor(ch / 1.45); }
+    const fs = Math.floor(ch * 0.70);
+    this.cardEls.forEach((c) => { c.style.width = cw + "px"; c.style.height = ch + "px"; });
+    this.digitEls.forEach((d) => { d.style.fontSize = fs + "px"; });
+    this.colonEl.style.fontSize = Math.max(8, Math.floor(fs * 0.85)) + "px";
+    const cardTop = 0.55 * h - ch / 2;
+    this.titleEl.style.top = (Math.max(0.08, cardTop / 2 / h) * 100) + "%";
+    this.titleEl.style.fontSize = this.titleFontSize + "px";
+  }
+
+  refresh() {
+    const c = this.compute();
+    const fg = c.over ? this.swColor : this.textColor;
+    const cardBg = adjustLightness(this.bgColor);
+    this.el.style.background = this.bgColor;
+    this.titleEl.textContent = this.title;
+    this.titleEl.style.color = fg;
+    this.titleEl.style.fontSize = this.titleFontSize + "px";
+    this.colonEl.style.color = fg;
+    const shown = Math.min(Math.abs(c.total), MAX_SECONDS);
+    const str = String(Math.floor(shown / 60)).padStart(2, "0") + String(shown % 60).padStart(2, "0");
+    this.cardEls.forEach((card) => { card.style.background = cardBg; });
+    this.digitEls.forEach((d, i) => { d.textContent = str[i]; d.style.color = fg; });
+    this.playBtn.textContent = this.running ? "⏸" : "▶";
+    this.playBtn.classList.toggle("running", this.running);
+    this.shown = c.total + (c.over ? "o" : "");
+  }
+
+  // called from the render loop: only touch the DOM when the displayed time changes
+  tickRender() {
+    if (!this.running) return;
+    const c = this.compute();
+    if (c.total + (c.over ? "o" : "") !== this.shown) this.refresh();
+  }
+}
+
+const app = {
+  timers: [], vCount: 1, blockStates: [true, true, true], selected: 0, settingsOpen: false,
+  code: null, offset: 0, unsubs: [], layoutCount: 0, seeded: false,
+
+  serverNow() { return Date.now() + this.offset; },
+
+  init() {
+    for (let i = 0; i < 3; i++) this.timers.push(new Timer(i));
+    this.blockBtns = [0, 1, 2].map((i) => {
+      const b = document.createElement("button");
+      b.className = "btn";
+      b.onclick = () => { this.blockStates[i] = !this.blockStates[i]; this.updateBlocks(); this.updateMaster(); };
+      $("#blocks").appendChild(b);
+      return b;
+    });
+    this.countBtns = [1, 2, 3].map((n) => {
+      const b = document.createElement("button");
+      b.className = "btn"; b.textContent = n + " Timer";
+      b.onclick = () => this.setCount(n);
+      $("#countBtns").appendChild(b);
+      return b;
+    });
+    this.tabBtns = [0, 1, 2].map((i) => {
+      const b = document.createElement("button");
+      b.className = "btn"; b.textContent = "T" + (i + 1);
+      b.onclick = () => this.switchEdit(i);
+      $("#tabBtns").appendChild(b);
+      return b;
+    });
+
+    $("#master").onclick = () => this.toggleSelected();
+    $("#fsBtn").onclick = () => this.toggleFs();
+    $("#settingsBtn").onclick = () => this.toggleSettings();
+    $("#applyBtn").onclick = () => this.apply();
+    let bgTimer = null;
+    $("#bgIn").oninput = (e) => {
+      const v = e.target.value; clearTimeout(bgTimer);
+      bgTimer = setTimeout(() => this.write({ [this.selected]: { bg_color: v } }), 120);
+    };
+    $("#bwBtn").onclick = () => {
+      const t = this.timers[this.selected];
+      this.write({ [this.selected]: { text_color: t.textColor === "#ffffff" ? "#000000" : "#ffffff" } });
+    };
+    $("#swBtn").onclick = () => {
+      const t = this.timers[this.selected];
+      this.write({ [this.selected]: { stopwatch_color: t.swColor === "#ef4444" ? "#facc15" : "#ef4444" } });
+    };
+    ["titleIn", "fsIn", "minIn", "secIn"].forEach((id) =>
+      $("#" + id).addEventListener("keydown", (e) => { if (e.key === "Enter") this.apply(); }));
+
+    $("#joinForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const v = $("#codeIn").value.trim();
+      if (!CODE_RE.test(v)) { $("#joinErr").textContent = "Use 3–32 letters, numbers, - or _."; return; }
+      this.join(v);
+    });
+    $("#leaveBtn").onclick = () => this.leave();
+    $("#copyBtn").onclick = async () => {
+      const url = new URL(location.href);
+      url.search = "?s=" + encodeURIComponent(this.code);
+      try { await navigator.clipboard.writeText(url.toString()); $("#copyBtn").textContent = "Copied"; }
+      catch (e) { prompt("Copy this link:", url.toString()); }
+      setTimeout(() => ($("#copyBtn").textContent = "Copy link"), 1500);
+    };
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === " " || e.code === "Space") {
+        const a = document.activeElement;
+        if ($("#join").classList.contains("open")) return;
+        if (a && ["INPUT", "TEXTAREA"].includes(a.tagName)) return;
+        e.preventDefault();
+        if (a && a.tagName === "BUTTON") a.blur();
+        this.toggleSelected();
+      } else if (e.key === "F11") { e.preventDefault(); this.toggleFs(); }
+    });
+
+    setInterval(() => this.timers.forEach((t) => t.tickRender()), 100);
+
+    this.renderLayout(1);
+    const fromUrl = new URLSearchParams(location.search).get("s");
+    const saved = localStorage.getItem(SESSION_KEY);
+    const start = [fromUrl, saved].find((v) => v && CODE_RE.test(v));
+    if (start) this.join(start); else this.showJoin();
+  },
+
+  showJoin() {
+    $("#join").classList.add("open");
+    $("#chip").hidden = true;
+    $("#codeIn").value = this.code || "";
+    setTimeout(() => $("#codeIn").focus(), 0);
+  },
+
+  join(code) {
+    this.leave(true);
+    this.code = code;
+    this.seeded = false;
+    try { localStorage.setItem(SESSION_KEY, code); } catch (e) {}
+    $("#join").classList.remove("open");
+    $("#joinErr").textContent = "";
+    $("#codeText").textContent = code;
+    $("#chip").hidden = false;
+
+    const root = ref(db, "sessions/" + code);
+    this.unsubs.push(onValue(ref(db, ".info/serverTimeOffset"), (s) => { this.offset = s.val() || 0; }));
+    this.unsubs.push(onValue(ref(db, ".info/connected"), (s) => $("#dot").classList.toggle("ok", !!s.val())));
+    this.unsubs.push(onValue(root, (snap) => {
+      const data = snap.val();
+      if (!data) {
+        if (!this.seeded) {
+          this.seeded = true;
+          const timers = {};
+          this.timers.forEach((t, i) => (timers[i] = t.defaults()));
+          set(root, { visible_count: 1, timers });
+        }
+        return;
+      }
+      this.seeded = true;
+      this.applyData(data);
+    }, (err) => {
+      this.showJoin();
+      $("#joinErr").textContent = "Could not open the session: " + err.message;
+    }));
+  },
+
+  leave(silent) {
+    this.unsubs.forEach((u) => u());
+    this.unsubs = [];
+    if (!silent) {
+      try { localStorage.removeItem(SESSION_KEY); } catch (e) {}
+      this.timers.forEach((t) => { t.running = false; });
+      this.showJoin();
+    }
+  },
+
+  applyData(data) {
+    const count = clamp(Number(data.visible_count) || 1, 1, 3);
+    this.renderLayout(count);
+    this.timers.forEach((t, i) => t.applyRemote(data.timers && data.timers[i]));
+    this.updateBlocks();
+    this.updateMaster();
+    if (this.settingsOpen) this.updateSw();
+  },
+
+  write(patches, extra) {
+    if (!this.code) return;
+    const u = {};
+    for (const [i, patch] of Object.entries(patches)) {
+      if (!patch) continue;
+      for (const [k, v] of Object.entries(patch)) u[`timers/${i}/${k}`] = v;
+    }
+    Object.assign(u, extra || {});
+    if (Object.keys(u).length) update(ref(db, "sessions/" + this.code), u);
+  },
+
+  renderLayout(count) {
+    this.vCount = count;
+    if (this.layoutCount !== count) {
+      this.layoutCount = count;
+      const c = $("#container");
+      c.innerHTML = "";
+      c.style.gridTemplateColumns = `repeat(${count}, 1fr)`;
+      this.timers.slice(0, count).forEach((t) => c.appendChild(t.el));
+      requestAnimationFrame(() => this.timers.slice(0, count).forEach((t) => t.updateSize()));
+    }
+    this.blockBtns.forEach((b, i) => (b.style.display = i < count ? "" : "none"));
+    this.countBtns.forEach((b, i) => b.classList.toggle("on", i + 1 === count));
+  },
+
+  setCount(n) {
+    const patches = {};
+    this.timers.forEach((t, i) => { if (i >= n) patches[i] = t.pausePatch(); });
+    this.write(patches, { visible_count: n });
+  },
+
+  active() { return this.timers.slice(0, this.vCount).filter((_, i) => this.blockStates[i]); },
+
+  updateBlocks() {
+    this.blockBtns.forEach((b, i) => {
+      b.textContent = this.timers[i].title;
+      b.classList.toggle("on", this.blockStates[i]);
+    });
+  },
+
+  updateMaster() {
+    const any = this.active().some((t) => t.running);
+    const m = $("#master");
+    m.textContent = any ? "■ STOP SELECTED" : "▶ START SELECTED";
+    m.className = "btn " + (any ? "stop" : "on");
+  },
+
+  toggleSelected() {
+    const act = this.active();
+    if (!act.length) return;
+    const target = !act.some((t) => t.running);
+    const patches = {};
+    act.forEach((t) => { if (t.running !== target) patches[t.index] = t.togglePatch(); });
+    this.write(patches);
+  },
+
+  toggleSettings() {
+    this.settingsOpen = !this.settingsOpen;
+    $("#settings").classList.toggle("open", this.settingsOpen);
+    $("#settingsBtn").className = "btn " + (this.settingsOpen ? "on" : "dark");
+    if (this.settingsOpen) this.switchEdit(this.selected);
+  },
+
+  switchEdit(idx) {
+    this.selected = idx;
+    this.tabBtns.forEach((b, i) => b.classList.toggle("on", i === idx));
+    const t = this.timers[idx];
+    $("#titleIn").value = t.title;
+    $("#fsIn").value = t.titleFontSize;
+    $("#minIn").value = Math.floor(t.resetSeconds / 60);
+    $("#secIn").value = t.resetSeconds % 60;
+    $("#bgIn").value = /^#[0-9a-f]{6}$/i.test(t.bgColor) ? t.bgColor : "#0f172a";
+    this.updateSw();
+  },
+
+  updateSw() {
+    const t = this.timers[this.selected];
+    const b = $("#swBtn");
+    b.textContent = t.swColor === "#facc15" ? "SW: YELLOW" : "SW: RED";
+    b.style.background = t.swColor;
+    b.style.color = t.swColor === "#facc15" ? "#000" : "#fff";
+  },
+
+  apply() {
+    const t = this.timers[this.selected];
+    const fs = parseInt($("#fsIn").value, 10);
+    const m = parseInt($("#minIn").value || "0", 10), s = parseInt($("#secIn").value || "0", 10);
+    const secs = (Number.isNaN(m) || Number.isNaN(s)) ? t.resetSeconds : clamp(m * 60 + s, 0, MAX_SECONDS);
+    const patch = {
+      title: $("#titleIn").value,
+      title_font_size: Number.isNaN(fs) ? 40 : clamp(fs, 10, 120),
+      reset_seconds: secs,
+    };
+    // only reset the clock if the time itself changed
+    if (secs !== t.resetSeconds) Object.assign(patch, { running: false, started_at: null, base_seconds: secs, base_overtime: false });
+    $("#minIn").value = Math.floor(secs / 60);
+    $("#secIn").value = secs % 60;
+    this.write({ [this.selected]: patch });
+  },
+
+  toggleFs() {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen().catch(() => {});
+  },
+};
+
+app.init();
+</script>
+</body>
+</html>
