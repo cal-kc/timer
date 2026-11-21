@@ -33,10 +33,14 @@
   #topbar .center { display: flex; align-items: center; gap: 10px; }
   #blocks { display: flex; gap: 6px; }
   #master { width: 160px; }
-  #chip { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
-  #dot { width: 10px; height: 10px; border-radius: 50%; background: var(--red); }
+  #chip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; color: var(--muted);
+    padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--border); }
+  #chip[hidden] { display: none; }
+  #dot { width: 10px; height: 10px; border-radius: 50%; background: var(--red); flex: none; }
   #dot.ok { background: var(--green); }
-  #codeText { color: #fff; font-weight: 700; letter-spacing: .5px; }
+  #codeText { color: #fff; font-weight: 700; letter-spacing: .5px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  #chip .btn.small { background: var(--border); }
+  #chip .btn.small:hover { background: #475569; }
 
   #main { position: relative; flex: 1; min-height: 0; background: #000; }
   #container { position: absolute; inset: 0; display: grid; gap: 2px; }
@@ -87,14 +91,7 @@
 </head>
 <body>
   <div id="topbar">
-    <div class="side">
-      <div id="chip" hidden>
-        <span id="dot" title="Connection status"></span>
-        <span id="codeText"></span>
-        <button id="copyBtn" class="btn dark small">Copy link</button>
-        <button id="leaveBtn" class="btn dark small">Leave</button>
-      </div>
-    </div>
+    <div class="side"></div>
     <div class="center">
       <div id="blocks"></div>
       <button id="master" class="btn on">▶ START SELECTED</button>
@@ -109,6 +106,12 @@
     <div id="container"></div>
     <div id="hint">Space: start/stop selected · F11: fullscreen</div>
     <div id="settings">
+      <div id="chip" hidden>
+        <span id="dot" title="Connection status"></span>
+        <span id="codeText"></span>
+        <button id="copyBtn" class="btn dark small">Get Controller Link</button>
+        <button id="leaveBtn" class="btn dark small">Leave</button>
+      </div>
       <h2>Settings</h2>
       <label>Display Timers Count</label>
       <div class="row" id="countBtns"></div>
@@ -379,11 +382,11 @@ const app = {
     });
     $("#leaveBtn").onclick = () => this.leave();
     $("#copyBtn").onclick = async () => {
-      const url = new URL(location.href);
+      const url = new URL("controller.html", location.href);
       url.search = "?s=" + encodeURIComponent(this.code);
       try { await navigator.clipboard.writeText(url.toString()); $("#copyBtn").textContent = "Copied"; }
       catch (e) { prompt("Copy this link:", url.toString()); }
-      setTimeout(() => ($("#copyBtn").textContent = "Copy link"), 1500);
+      setTimeout(() => ($("#copyBtn").textContent = "Get Controller Link"), 1500);
     };
 
     document.addEventListener("keydown", (e) => {
